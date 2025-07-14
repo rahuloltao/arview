@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body, html {
+      margin: 0; padding: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    video {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+    }
+    img#fan-overlay {
+      position: absolute;
+      width: 300px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <video autoplay playsinline></video>
+  <img id="fan-overlay" src="" alt="Fan Overlay" />
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const imageUrl = urlParams.get('img');
+
+    const overlay = document.getElementById('fan-overlay');
+    if (imageUrl) {
+      overlay.src = imageUrl;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        document.querySelector('video').srcObject = stream;
+      });
+  </script>
+</body>
+</html>
+
+
+  git config --global user.email "rahuloltao@gmail.com"
+  git config --global user.name "rahuloltao"
