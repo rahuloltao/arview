@@ -1,49 +1,84 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View in Your Room</title>
   <style>
-    body, html {
-      margin: 0; padding: 0;
+    html, body {
+      margin: 0;
+      padding: 0;
       overflow: hidden;
-      position: relative;
+      height: 100%;
+      background: #000;
     }
     video {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
+      position: absolute;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       z-index: 0;
     }
-    img#fan-overlay {
+    #overlay-image {
       position: absolute;
-      width: 300px;
-      top: 50%;
+      top: 40%;
       left: 50%;
       transform: translate(-50%, -50%);
+      width: 200px;
       z-index: 1;
-      touch-action: none;
+      cursor: grab;
+      user-select: none;
     }
   </style>
 </head>
 <body>
-  <video autoplay playsinline></video>
-  <img id="fan-overlay" src="" alt="Fan Overlay" />
+  <video id="camera" autoplay muted playsinline></video>
+  <img id="overlay-image" src="" alt="Product Image">
 
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const imageUrl = urlParams.get('img');
-
-    const overlay = document.getElementById('fan-overlay');
-    if (imageUrl) {
-      overlay.src = imageUrl;
+    // Parse image URL from query string
+    const params = new URLSearchParams(window.location.search);
+    const imgUrl = params.get('img');
+    const overlayImg = document.getElementById('overlay-image');
+    if (imgUrl) {
+      overlayImg.src = imgUrl;
+    } else {
+      overlayImg.style.display = 'none';
     }
 
+    // Start camera
     navigator.mediaDevices.getUserMedia({ video: true })
       .then(stream => {
-        document.querySelector('video').srcObject = stream;
+        const video = document.getElementById('camera');
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert('Camera access denied or not available.');
+        console.error(err);
       });
+
+    // Dragging logic
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    overlayImg.addEventListener('mousedown', function(e) {
+      isDragging = true;
+      offsetX = e.clientX - overlayImg.offsetLeft;
+      offsetY = e.clientY - overlayImg.offsetTop;
+      overlayImg.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (isDragging) {
+        overlayImg.style.left = (e.clientX - offsetX) + 'px';
+        overlayImg.style.top = (e.clientY - offsetY) + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      isDragging = false;
+      overlayImg.style.cursor = 'grab';
+    });
   </script>
 </body>
 </html>
