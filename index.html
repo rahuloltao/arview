@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>View in Your Room</title>
   <style>
     html, body {
@@ -28,15 +28,16 @@
       z-index: 1;
       cursor: grab;
       user-select: none;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <video id="camera" autoplay muted playsinline></video>
-  <img id="overlay-image" src="" alt="Product Image">
+  <img id="overlay-image" src="" alt="Product Image" />
 
   <script>
-    // Parse image URL from query string
+    // Load image from URL
     const params = new URLSearchParams(window.location.search);
     const imgUrl = params.get('img');
     const overlayImg = document.getElementById('overlay-image');
@@ -46,39 +47,57 @@
       overlayImg.style.display = 'none';
     }
 
-    // Start camera
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        const video = document.getElementById('camera');
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        alert('Camera access denied or not available.');
-        console.error(err);
-      });
+    // Start rear camera
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }
+    })
+    .then(stream => {
+      document.getElementById('camera').srcObject = stream;
+    })
+    .catch(err => {
+      alert('Camera access denied or not available.');
+      console.error(err);
+    });
 
-    // Dragging logic
-    let isDragging = false;
-    let offsetX, offsetY;
+    // Drag support (mouse + touch)
+    let isDragging = false, offsetX = 0, offsetY = 0;
 
-    overlayImg.addEventListener('mousedown', function(e) {
+    const startDrag = (x, y) => {
       isDragging = true;
-      offsetX = e.clientX - overlayImg.offsetLeft;
-      offsetY = e.clientY - overlayImg.offsetTop;
+      offsetX = x - overlayImg.offsetLeft;
+      offsetY = y - overlayImg.offsetTop;
       overlayImg.style.cursor = 'grabbing';
-    });
+    };
 
-    document.addEventListener('mousemove', function(e) {
+    const moveDrag = (x, y) => {
       if (isDragging) {
-        overlayImg.style.left = (e.clientX - offsetX) + 'px';
-        overlayImg.style.top = (e.clientY - offsetY) + 'px';
+        overlayImg.style.left = (x - offsetX) + 'px';
+        overlayImg.style.top = (y - offsetY) + 'px';
       }
-    });
+    };
 
-    document.addEventListener('mouseup', function() {
+    const stopDrag = () => {
       isDragging = false;
       overlayImg.style.cursor = 'grab';
+    };
+
+    // Mouse events
+    overlayImg.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+    document.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+    document.addEventListener('mouseup', stopDrag);
+
+    // Touch events
+    overlayImg.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
     });
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length === 1) {
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
+    document.addEventListener('touchend', stopDrag);
   </script>
 </body>
 </html>
