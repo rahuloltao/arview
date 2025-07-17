@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>View in Your Room</title>
   <style>
     html, body {
@@ -21,148 +21,84 @@
     }
     #overlay-image {
       position: absolute;
-      top: 50%;
+      top: 40%;
       left: 50%;
-      transform: translate(-50%, -50%) scale(1) rotate(0deg);
+      transform: translate(-50%, -50%);
       width: 200px;
       z-index: 1;
-      touch-action: none;
       cursor: grab;
-    }
-    #controls {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 10px;
-      z-index: 2;
-    }
-    .control-btn {
-      background: rgba(255, 255, 255, 0.9);
-      border: none;
-      padding: 10px 16px;
-      font-size: 14px;
-      border-radius: 8px;
-      font-weight: bold;
-      cursor: pointer;
+      user-select: none;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <video id="camera" autoplay muted playsinline></video>
-  <img id="overlay-image" src="" alt="Overlay" />
-  <div id="controls">
-    <button id="lockBtn" class="control-btn">🔒 Lock</button>
-    <button id="resetBtn" class="control-btn">🔄 Reset</button>
-    <button id="switchCameraBtn" class="control-btn">📷 Switch</button>
-  </div>
+  <img id="overlay-image" src="" alt="Product Image" />
 
   <script>
+    // Load image from URL
     const params = new URLSearchParams(window.location.search);
-    const imgUrl = params.get("img");
-    const overlay = document.getElementById("overlay-image");
-    if (imgUrl) overlay.src = imgUrl;
-
-    // Camera stream
-    let usingFront = false;
-    async function startCamera(facingMode = "environment") {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
-          audio: false,
-        });
-        document.getElementById("camera").srcObject = stream;
-      } catch (err) {
-        alert("Camera access denied.");
-        console.error(err);
-      }
+    const imgUrl = params.get('img');
+    const overlayImg = document.getElementById('overlay-image');
+    if (imgUrl) {
+      overlayImg.src = imgUrl;
+    } else {
+      overlayImg.style.display = 'none';
     }
-    startCamera();
 
-    // Switch camera
-    document.getElementById("switchCameraBtn").onclick = () => {
-      usingFront = !usingFront;
-      startCamera(usingFront ? "user" : "environment");
-    };
-
-    // Drag, Zoom, Rotate
-    let isLocked = false;
-    let scale = 1;
-    let rotation = 0;
-    let lastTouchDistance = 0;
-    let lastAngle = 0;
-    let startX, startY;
-
-    overlay.addEventListener("touchstart", (e) => {
-      if (isLocked) return;
-      if (e.touches.length === 1) {
-        startX = e.touches[0].clientX - overlay.offsetLeft;
-        startY = e.touches[0].clientY - overlay.offsetTop;
-      }
-      if (e.touches.length === 2) {
-        lastTouchDistance = getDistance(e.touches);
-        lastAngle = getAngle(e.touches);
-      }
+    // Start rear camera
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }
+    })
+    .then(stream => {
+      document.getElementById('camera').srcObject = stream;
+    })
+    .catch(err => {
+      alert('Camera access denied or not available.');
+      console.error(err);
     });
 
-    overlay.addEventListener("touchmove", (e) => {
-      e.preventDefault();
-      if (isLocked) return;
+    // Drag support (mouse + touch)
+    let isDragging = false, offsetX = 0, offsetY = 0;
 
-      if (e.touches.length === 1) {
-        let x = e.touches[0].clientX - startX;
-        let y = e.touches[0].clientY - startY;
-        overlay.style.left = `${x}px`;
-        overlay.style.top = `${y}px`;
+    const startDrag = (x, y) => {
+      isDragging = true;
+      offsetX = x - overlayImg.offsetLeft;
+      offsetY = y - overlayImg.offsetTop;
+      overlayImg.style.cursor = 'grabbing';
+    };
+
+    const moveDrag = (x, y) => {
+      if (isDragging) {
+        overlayImg.style.left = (x - offsetX) + 'px';
+        overlayImg.style.top = (y - offsetY) + 'px';
       }
+    };
 
-      if (e.touches.length === 2) {
-        const newDistance = getDistance(e.touches);
-        const newAngle = getAngle(e.touches);
+    const stopDrag = () => {
+      isDragging = false;
+      overlayImg.style.cursor = 'grab';
+    };
 
-        // Zoom
-        scale *= newDistance / lastTouchDistance;
-        lastTouchDistance = newDistance;
+    // Mouse events
+    overlayImg.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+    document.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+    document.addEventListener('mouseup', stopDrag);
 
-        // Rotate
-        rotation += newAngle - lastAngle;
-        lastAngle = newAngle;
-
-        applyTransform();
+    // Touch events
+    overlayImg.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
       }
     });
-
-    function getDistance(touches) {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    function getAngle(touches) {
-      const dx = touches[1].clientX - touches[0].clientX;
-      const dy = touches[1].clientY - touches[0].clientY;
-      return Math.atan2(dy, dx) * (180 / Math.PI);
-    }
-
-    function applyTransform() {
-      overlay.style.transform = `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`;
-    }
-
-    // Lock/Reset Controls
-    document.getElementById("lockBtn").onclick = () => {
-      isLocked = !isLocked;
-      document.getElementById("lockBtn").textContent = isLocked ? "🔓 Unlock" : "🔒 Lock";
-      overlay.style.cursor = isLocked ? "default" : "grab";
-    };
-
-    document.getElementById("resetBtn").onclick = () => {
-      scale = 1;
-      rotation = 0;
-      overlay.style.left = "50%";
-      overlay.style.top = "50%";
-      applyTransform();
-    };
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length === 1) {
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
+    document.addEventListener('touchend', stopDrag);
   </script>
 </body>
 </html>
+
