@@ -6,11 +6,12 @@
   <title>View in Your Room</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       overflow: hidden;
       height: 100%;
       background: #000;
+      touch-action: none;
+      user-select: none;
     }
     video {
       position: absolute;
@@ -21,83 +22,157 @@
     }
     #overlay-image {
       position: absolute;
-      top: 40%;
+      top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%);
       width: 200px;
+      transform: translate(-50%, -50%);
       z-index: 1;
       cursor: grab;
-      user-select: none;
       touch-action: none;
+    }
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 16px;
+      border: none;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <video id="camera" autoplay muted playsinline></video>
-  <img id="overlay-image" src="" alt="Product Image" />
+  <img id="overlay-image" src="" alt="Overlay" />
+  
+  <div class="controls">
+    <button id="switch-camera">🔄 Switch Camera</button>
+    <button id="lock-btn">🔒 Lock</button>
+    <button id="reset-btn">🔁 Reset</button>
+  </div>
 
   <script>
-    // Load image from URL
+    let isDragging = false;
+    let offsetX, offsetY;
+    let currentScale = 1;
+    let isLocked = false;
+    let usingFrontCamera = false;
+    let currentStream = null;
+
+    const overlayImg = document.getElementById('overlay-image');
+    const video = document.getElementById('camera');
+
+    // Load overlay image from URL param
     const params = new URLSearchParams(window.location.search);
     const imgUrl = params.get('img');
-    const overlayImg = document.getElementById('overlay-image');
-    if (imgUrl) {
-      overlayImg.src = imgUrl;
-    } else {
-      overlayImg.style.display = 'none';
-    }
+    if (imgUrl) overlayImg.src = imgUrl;
 
-    // Start rear camera
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
-    })
-    .then(stream => {
-      document.getElementById('camera').srcObject = stream;
-    })
-    .catch(err => {
-      alert('Camera access denied or not available.');
-      console.error(err);
+    // Start camera with given facing mode
+    function startCamera(facingMode = 'environment') {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      navigator.mediaDevices.getUserMedia({ video: { facingMode } })
+        .then(stream => {
+          video.srcObject = stream;
+          currentStream = stream;
+        })
+        .catch(err => alert('Camera error: ' + err.message));
+    }
+    startCamera();
+
+    // Switch camera
+    document.getElementById('switch-camera').addEventListener('click', () => {
+      usingFrontCamera = !usingFrontCamera;
+      startCamera(usingFrontCamera ? 'user' : 'environment');
     });
 
-    // Drag support (mouse + touch)
-    let isDragging = false, offsetX = 0, offsetY = 0;
-
-    const startDrag = (x, y) => {
+    // Drag logic
+    overlayImg.addEventListener('mousedown', e => {
+      if (isLocked) return;
       isDragging = true;
-      offsetX = x - overlayImg.offsetLeft;
-      offsetY = y - overlayImg.offsetTop;
+      offsetX = e.clientX - overlayImg.offsetLeft;
+      offsetY = e.clientY - overlayImg.offsetTop;
       overlayImg.style.cursor = 'grabbing';
-    };
+    });
 
-    const moveDrag = (x, y) => {
+    document.addEventListener('mousemove', e => {
       if (isDragging) {
-        overlayImg.style.left = (x - offsetX) + 'px';
-        overlayImg.style.top = (y - offsetY) + 'px';
+        overlayImg.style.left = (e.clientX - offsetX) + 'px';
+        overlayImg.style.top = (e.clientY - offsetY) + 'px';
       }
-    };
+    });
 
-    const stopDrag = () => {
+    document.addEventListener('mouseup', () => {
       isDragging = false;
       overlayImg.style.cursor = 'grab';
-    };
+    });
 
-    // Mouse events
-    overlayImg.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
-    document.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
-    document.addEventListener('mouseup', stopDrag);
-
-    // Touch events
+    // Touch move
     overlayImg.addEventListener('touchstart', e => {
+      if (isLocked) return;
       if (e.touches.length === 1) {
-        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        isDragging = true;
+        offsetX = e.touches[0].clientX - overlayImg.offsetLeft;
+        offsetY = e.touches[0].clientY - overlayImg.offsetTop;
       }
     });
-    document.addEventListener('touchmove', e => {
-      if (e.touches.length === 1) {
-        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+
+    overlayImg.addEventListener('touchmove', e => {
+      if (isLocked) return;
+      if (e.touches.length === 1 && isDragging) {
+        overlayImg.style.left = (e.touches[0].clientX - offsetX) + 'px';
+        overlayImg.style.top = (e.touches[0].clientY - offsetY) + 'px';
+      }
+      // Pinch to zoom
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (!overlayImg.startDist) overlayImg.startDist = dist;
+        const scale = dist / overlayImg.startDist;
+        currentScale = Math.min(3, Math.max(0.5, scale));
+        overlayImg.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
       }
     });
-    document.addEventListener('touchend', stopDrag);
+
+    overlayImg.addEventListener('touchend', e => {
+      isDragging = false;
+      overlayImg.style.cursor = 'grab';
+      overlayImg.startDist = null;
+    });
+
+    // Tap to reposition image
+    document.addEventListener('click', (e) => {
+      if (isLocked || e.target.tagName === 'BUTTON') return;
+      overlayImg.style.left = `${e.clientX}px`;
+      overlayImg.style.top = `${e.clientY}px`;
+    });
+
+    // Lock/Unlock
+    document.getElementById('lock-btn').addEventListener('click', () => {
+      isLocked = !isLocked;
+      document.getElementById('lock-btn').textContent = isLocked ? '🔓 Unlock' : '🔒 Lock';
+    });
+
+    // Reset
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      overlayImg.style.left = '50%';
+      overlayImg.style.top = '50%';
+      currentScale = 1;
+      overlayImg.style.transform = 'translate(-50%, -50%) scale(1)';
+      isLocked = false;
+      document.getElementById('lock-btn').textContent = '🔒 Lock';
+    });
   </script>
 </body>
 </html>
