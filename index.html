@@ -179,45 +179,60 @@
       overlayImg.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
     });
 
-    // Screenshot
-    document.getElementById('screenshot-btn').addEventListener('click', () => {
-      const canvas = document.getElementById('capture-canvas');
-      const context = canvas.getContext('2d');
+   // Screenshot
+document.getElementById('screenshot-btn').addEventListener('click', () => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+  // Use actual video resolution
+  const videoWidth = video.videoWidth;
+  const videoHeight = video.videoHeight;
 
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if (!videoWidth || !videoHeight) {
+    alert("Camera not ready yet. Please try again.");
+    return;
+  }
 
-      const img = new Image();
-      img.onload = () => {
-        const overlayRect = overlayImg.getBoundingClientRect();
-        const videoRect = video.getBoundingClientRect();
+  canvas.width = videoWidth;
+  canvas.height = videoHeight;
 
-        const overlayCanvasX = overlayRect.left - videoRect.left;
-        const overlayCanvasY = overlayRect.top - videoRect.top;
+  // Draw the camera frame
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        const scaleX = canvas.width / videoRect.width;
-        const scaleY = canvas.height / videoRect.height;
+  // Convert DOM overlay position to canvas coordinates
+  const overlayRect = overlayImg.getBoundingClientRect();
+  const videoRect = video.getBoundingClientRect();
 
-        context.save();
-        context.translate(
-          overlayCanvasX * scaleX + (overlayImg.offsetWidth * scaleX / 2),
-          overlayCanvasY * scaleY + (overlayImg.offsetHeight * scaleY / 2)
-        );
-        context.rotate(currentRotation * Math.PI / 180);
-        context.scale(currentScale, currentScale);
-        context.translate(-overlayImg.offsetWidth / 2, -overlayImg.offsetHeight / 2);
-        context.drawImage(img, 0, 0, overlayImg.offsetWidth, overlayImg.offsetHeight);
-        context.restore();
+  const overlayX = (overlayRect.left - videoRect.left) * (canvas.width / videoRect.width);
+  const overlayY = (overlayRect.top - videoRect.top) * (canvas.height / videoRect.height);
+  const overlayW = overlayImg.offsetWidth * (canvas.width / videoRect.width);
+  const overlayH = overlayImg.offsetHeight * (canvas.height / videoRect.height);
 
-        const link = document.createElement('a');
-        link.download = 'screenshot.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-      };
-      img.src = overlayImg.src;
-    });
+  const centerX = overlayX + overlayW / 2;
+  const centerY = overlayY + overlayH / 2;
+
+  const tempImg = new Image();
+  tempImg.crossOrigin = "anonymous"; // required if loading from other domain
+  tempImg.onload = () => {
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(currentRotation * Math.PI / 180);
+    ctx.scale(currentScale, currentScale);
+    ctx.drawImage(tempImg, -overlayW / 2, -overlayH / 2, overlayW, overlayH);
+    ctx.restore();
+
+    const link = document.createElement('a');
+    link.download = 'screenshot.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  tempImg.onerror = () => {
+    alert("Failed to load overlay image for screenshot.");
+  };
+
+  tempImg.src = overlayImg.src;
+});
   </script>
 </body>
 </html>
