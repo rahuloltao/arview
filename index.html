@@ -65,7 +65,7 @@
 
   <canvas id="capture-canvas"></canvas>
 
-  <script>
+  <!-- <script>
     let isDragging = false;
     let offsetX, offsetY;
     let currentScale = 1;
@@ -235,6 +235,162 @@ document.getElementById('screenshot-btn').addEventListener('click', () => {
 
   tempImg.src = overlayImg.src;
 });
-  </script>
+  </script> -->
+<script>
+  let isDragging = false;
+  let offsetX, offsetY;
+  let currentScale = 1;
+  let usingFrontCamera = false;
+  let currentStream = null;
+
+  const overlayImg = document.getElementById('overlay-image');
+  const video = document.getElementById('camera');
+
+  const params = new URLSearchParams(window.location.search);
+  const imgUrl = params.get('img');
+  if (imgUrl) overlayImg.src = imgUrl;
+
+  function startCamera(facingMode = 'environment') {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode } })
+      .then(stream => {
+        video.srcObject = stream;
+        currentStream = stream;
+      })
+      .catch(err => alert('Camera error: ' + err.message));
+  }
+  startCamera();
+
+  document.getElementById('switch-camera').addEventListener('click', () => {
+    usingFrontCamera = !usingFrontCamera;
+    startCamera(usingFrontCamera ? 'user' : 'environment');
+  });
+
+  // Mouse Drag
+  overlayImg.addEventListener('mousedown', e => {
+    isDragging = true;
+    offsetX = e.clientX - overlayImg.offsetLeft;
+    offsetY = e.clientY - overlayImg.offsetTop;
+    overlayImg.style.cursor = 'grabbing';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (isDragging) {
+      overlayImg.style.left = (e.clientX - offsetX) + 'px';
+      overlayImg.style.top = (e.clientY - offsetY) + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    overlayImg.style.cursor = 'grab';
+  });
+
+  // Touch logic
+  let initialDist = null;
+  let initialScale = 1;
+
+  overlayImg.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      offsetX = e.touches[0].clientX - overlayImg.offsetLeft;
+      offsetY = e.touches[0].clientY - overlayImg.offsetTop;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      initialDist = Math.hypot(dx, dy);
+      initialScale = currentScale;
+    }
+  }, { passive: false });
+
+  overlayImg.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      overlayImg.style.left = (e.touches[0].clientX - offsetX) + 'px';
+      overlayImg.style.top = (e.touches[0].clientY - offsetY) + 'px';
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const newDist = Math.hypot(dx, dy);
+      const scale = newDist / initialDist;
+      currentScale = Math.min(3, Math.max(0.3, initialScale * scale));
+      overlayImg.style.transform = `translate(-50%, -50%) scale(${currentScale})`;
+    }
+  }, { passive: false });
+
+  overlayImg.addEventListener('touchend', () => {
+    isDragging = false;
+    overlayImg.style.cursor = 'grab';
+  });
+
+  // Tap to reposition
+  document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    overlayImg.style.left = `${e.clientX}px`;
+    overlayImg.style.top = `${e.clientY}px`;
+  });
+
+  // Reset
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    overlayImg.style.left = '50%';
+    overlayImg.style.top = '50%';
+    currentScale = 1;
+    overlayImg.style.transform = 'translate(-50%, -50%) scale(1)';
+  });
+
+  // Screenshot
+  document.getElementById('screenshot-btn').addEventListener('click', () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+
+    if (!videoWidth || !videoHeight) {
+      alert("Camera not ready yet. Please try again.");
+      return;
+    }
+
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const overlayRect = overlayImg.getBoundingClientRect();
+    const videoRect = video.getBoundingClientRect();
+
+    const overlayX = (overlayRect.left - videoRect.left) * (canvas.width / videoRect.width);
+    const overlayY = (overlayRect.top - videoRect.top) * (canvas.height / videoRect.height);
+    const overlayW = overlayImg.offsetWidth * (canvas.width / videoRect.width);
+    const overlayH = overlayImg.offsetHeight * (canvas.height / videoRect.height);
+
+    const centerX = overlayX + overlayW / 2;
+    const centerY = overlayY + overlayH / 2;
+
+    const tempImg = new Image();
+    tempImg.crossOrigin = "anonymous";
+    tempImg.onload = () => {
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(currentScale, currentScale);
+      ctx.drawImage(tempImg, -overlayW / 2, -overlayH / 2, overlayW, overlayH);
+      ctx.restore();
+
+      const link = document.createElement('a');
+      link.download = 'screenshot.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    tempImg.onerror = () => {
+      alert("Failed to load overlay image for screenshot.");
+    };
+    tempImg.src = overlayImg.src;
+  });
+</script>
+
+
 </body>
 </html>
